@@ -49,6 +49,13 @@ var dew_readout: Label
 var companion_portrait: TextureRect
 var companion_name: Label
 var companion_detail: Label
+var hud_chrome: Control
+var top_controls: HBoxContainer
+var map_choices: HBoxContainer
+var setup_button: Button
+var auto_button: Button
+var heart_icon: TextureRect
+var hud_layer: Control
 
 func _ready() -> void:
 	DisplayServer.window_set_min_size(Vector2i(1120,760))
@@ -115,6 +122,49 @@ func _build_shell() -> void:
 	world_image.mouse_filter=Control.MOUSE_FILTER_STOP
 	world_image.gui_input.connect(_world_input)
 	add_child(world_image)
+	hud_chrome=preload("res://scripts/hud_frame.gd").new()
+	hud_chrome.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	add_child(hud_chrome)
+	hud_layer=Control.new()
+	hud_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	add_child(hud_layer)
+	heart_icon=TextureRect.new()
+	heart_icon.texture=PixelArt.texture("heart")
+	heart_icon.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
+	heart_icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	heart_icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	heart_icon.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	hud_layer.add_child(heart_icon)
+	heart_readout=_label("",18,CREAM)
+	hud_layer.add_child(heart_readout)
+	battle_title=_label("",18,CREAM)
+	battle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	hud_layer.add_child(battle_title)
+	dew_readout=_label("",20,Color("8fd0d0"))
+	dew_readout.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	hud_layer.add_child(dew_readout)
+	top_controls=HBoxContainer.new()
+	add_child(top_controls)
+	map_choices=HBoxContainer.new()
+	map_choices.add_theme_constant_override("separation",12)
+	add_child(map_choices)
+	setup_button=Button.new()
+	setup_button.pressed.connect(func():
+		if mode=="battle": _toggle_pause()
+		elif mode=="map": _enter_selected())
+	add_child(setup_button)
+	auto_button=Button.new()
+	auto_button.text="推荐布阵"
+	auto_button.pressed.connect(_auto_deploy)
+	add_child(auto_button)
+	skill_button=Button.new()
+	skill_button.icon=PixelArt.texture("heart")
+	skill_button.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	skill_button.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP
+	skill_button.expand_icon=true
+	skill_button.add_theme_constant_override("icon_max_width",42)
+	skill_button.pressed.connect(_skill)
+	add_child(skill_button)
 	world_title=_label("",21,CREAM)
 	add_child(world_title)
 	world_hint=_label("",15,MUTED)
@@ -148,26 +198,76 @@ func _build_shell() -> void:
 
 func _layout() -> void:
 	if not is_instance_valid(world_image): return
-	var available = size.x-396
-	var render_size = Vector2i(480,270) if size.x>=1376 and size.y>=900 else Vector2i(384,216)
+	var render_size=Vector2i(480,270) if size.x>=1376 and size.y>=900 else Vector2i(384,216)
 	world.size=render_size
-	var scale_factor = maxi(1,mini(int(available/render_size.x),int((size.y-360)/render_size.y)))
-	world_image.size=Vector2(render_size)*scale_factor
-	world_image.position=Vector2(24+(available-world_image.size.x)/2,132)
-	world_title.position=Vector2(32,100)
-	world_hint.position=Vector2(world_image.position.x,world_image.position.y+world_image.size.y+5)
-	world_hint.size=Vector2(available,25)
-	side_panel.position=Vector2(size.x-368,104)
-	side_panel.size=Vector2(348,size.y-138)
-	side_scroll.position=Vector2(size.x-350,124)
-	side_scroll.size=Vector2(312,size.y-180)
-	status.position=Vector2(size.x-650,29)
-	status.size=Vector2(620,45)
-	action_bar.position=Vector2(32,world_image.position.y+world_image.size.y+29)
-	roster_scroll.position=Vector2(32,maxf(size.y-147,action_bar.position.y+56))
-	roster_scroll.size=Vector2(available-12,122)
-	toast.position=Vector2(32,size.y-29)
-	toast.size=Vector2(size.x-60,27)
+	var integer_scale=maxi(1,mini(int(size.x/render_size.x),int((size.y-70)/render_size.y)))
+	world_image.size=Vector2(render_size)*integer_scale
+	world_image.position=Vector2((size.x-world_image.size.x)/2,76)
+	if mode=="map": world_image.position.y=(size.y-world_image.size.y)/2-84
+	elif mode not in ["battle","reward","service"]: world_image.position.y=32
+	var playing=mode in ["battle","map"]
+	header.visible=not playing
+	subtitle.visible=false
+	status.visible=not playing
+	header.position=Vector2(26,20)
+	status.position=Vector2(size.x-440,24)
+	status.size=Vector2(410,36)
+	world_title.position=Vector2(28,92)
+	world_title.add_theme_font_size_override("font_size",18)
+	world_hint.position=Vector2(28,size.y-150)
+	world_hint.size=Vector2(size.x-390,24)
+	world_hint.visible=mode!="map"
+	side_panel.visible=not playing
+	side_scroll.visible=not playing
+	side_panel.position=Vector2(size.x-360,108)
+	side_panel.size=Vector2(336,size.y-274)
+	side_scroll.position=side_panel.position+Vector2(16,16)
+	side_scroll.size=side_panel.size-Vector2(32,32)
+	action_bar.position=Vector2(28,138)
+	action_bar.visible=not mode=="battle"
+	top_controls.position=Vector2(size.x-238,24)
+	top_controls.visible=mode=="battle"
+	heart_icon.position=Vector2(30,24)
+	heart_icon.size=Vector2(44,44)
+	heart_readout.position=Vector2(84,22)
+	battle_title.position=Vector2(size.x/2-134,24)
+	battle_title.size=Vector2(240,40)
+	dew_readout.position=Vector2(size.x-430,27)
+	dew_readout.size=Vector2(174,36)
+	hud_layer.visible=playing
+	map_choices.visible=mode=="map"
+	map_choices.position=Vector2(28,size.y-222)
+	map_choices.size=Vector2(size.x-56,82)
+	roster_scroll.position=Vector2(28,size.y-116)
+	roster_scroll.size=Vector2(size.x-(340 if mode=="battle" else 210 if mode=="map" else 56),104)
+	setup_button.position=Vector2(size.x-310,size.y-110)
+	setup_button.size=Vector2(158,64)
+	if mode=="map":
+		setup_button.position=Vector2(size.x-176,size.y-110)
+		setup_button.size=Vector2(148,64)
+	setup_button.visible=mode=="battle" and sim!=null and not sim.running or mode=="map" and selected_node>=0
+	auto_button.position=Vector2(size.x-310,size.y-166)
+	auto_button.size=Vector2(158,43)
+	auto_button.visible=mode=="battle" and sim!=null and not sim.running
+	skill_button.position=Vector2(size.x-132,size.y-120)
+	skill_button.size=Vector2(104,91)
+	skill_button.visible=mode=="battle"
+	toast.position=Vector2(28,size.y-182 if mode!="map" else 190)
+	toast.size=Vector2(size.x-390,42)
+	toast.add_theme_font_size_override("font_size",15)
+	hud_chrome.size=size
+	hud_chrome.panels.assign([Rect2(roster_scroll.position-Vector2(8,8),Vector2(minf(roster_scroll.size.x,float(roster.get_child_count())*106.0-10.0)+16,roster_scroll.size.y+8))])
+	if playing:
+		hud_chrome.panels.append(Rect2(22,16,260,62))
+		hud_chrome.panels.append(Rect2(size.x/2-144,18,260,54))
+		hud_chrome.panels.append(Rect2(size.x-436,20,180,52))
+		hud_chrome.hp_rect=Rect2(84,53,174,12)
+	else: hud_chrome.hp_rect=Rect2()
+	if mode=="battle":
+		hud_chrome.panels.append(Rect2(size.x-140,size.y-128,120,112))
+		hud_chrome.cooldown_rect=Rect2(size.x-122,size.y-24,84,5)
+	else: hud_chrome.cooldown_rect=Rect2()
+	hud_chrome.queue_redraw()
 
 func _label(text_value: String, font_size: int = 17, color: Color = CREAM) -> Label:
 	var label = Label.new()
@@ -195,7 +295,8 @@ func _button(text_value: String, callback: Callable, disabled: bool = false) -> 
 func _action(text_value: String, callback: Callable) -> Button:
 	var button = Button.new()
 	button.text=text_value
-	button.custom_minimum_size=Vector2(125,43)
+	button.custom_minimum_size=Vector2(86,38)
+	button.add_theme_font_size_override("font_size",14)
 	button.pressed.connect(callback)
 	action_bar.add_child(button)
 	return button
@@ -208,10 +309,14 @@ func _clear(container: Node) -> void:
 func _reset_ui() -> void:
 	_clear(sidebar)
 	_clear(action_bar)
+	_clear(top_controls)
+	_clear(map_choices)
 	_clear(roster)
 	selected_node=-1
 	side_scroll.scroll_vertical=0
-	battle_title=null
+	setup_button.visible=false
+	auto_button.visible=false
+	skill_button.visible=false
 
 func _replace_world(node: Node3D) -> void:
 	if is_instance_valid(world_node):
@@ -264,23 +369,23 @@ func _show_map() -> void:
 	else: globe.focus_cell(int(run.candidates[0].cell))
 	world_title.text="苔眠星  /  星相 · %s  /  清亮 %d%%"%[RunState.STAGES[run.stage],int(run.planet.clear_fraction()*100)]
 	world_hint.text="拖动星球：全向旋转  ·  点击正面标记，或先从右侧定位落点"
-	_text(run.time_label(),GOLD,21)
-	_text(run.last_message,MUTED,16)
-	_text("选择这一个时辰的落点",CREAM,19)
+	battle_title.text=run.time_label().split(" / ")[0]
+	heart_readout.text="心灯  %d / %d"%[run.hp,run.max_hp]
+	dew_readout.text="露罐  %d"%run.dew
+	hud_chrome.hp_ratio=float(run.hp)/run.max_hp
 	for i in run.candidates.size():
-		var node: Dictionary = run.candidates[i]
-		var title = "星心 · 眠眠" if node.spring==2 else TYPES[node.type]
-		if node.type=="boss" and node.spring!=2: title="第 %d 口浊泉"%(int(node.spring)+1)
-		_button("%s  ·  %s\n%s"%[title,BIOMES.get(node.biome,"草原"),_node_reward(node)],_select_node.bind(i))
-	_text("伙伴达到3级后，点击下方卡片免费化形。",MINT,15)
-	_text("三口浊泉",GOLD,19)
-	for i in run.planet.springs.size():
-		var spring: Dictionary = run.planet.springs[i]
-		var need = ["初醒 + 守心胜利 2 场","萌青 + 守心胜利 4 场","繁茂 + 前两泉已封"][i]
-		_text("%s %s：%s"%["◇" if spring.sealed else "◆","星心" if i==2 else "浊泉%d"%(i+1),"清泉" if spring.sealed else "Lv.%d · %s"%[spring.level,need]],MINT if spring.sealed else MUTED,15)
-	_action("回到落点",_focus_selected)
-	_action("玩法小笺",_help)
-	_action("结束远行",_confirm_retreat)
+		var node:Dictionary=run.candidates[i]
+		var title="星心 · 眠眠" if node.spring==2 else TYPES[node.type]
+		var button=Button.new()
+		button.text="%s   ·   %s\n%s"%[title,BIOMES.get(node.biome,"草原"),_node_reward(node)]
+		button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size=Vector2(0,82)
+		button.add_theme_font_size_override("font_size",16)
+		button.pressed.connect(_select_node.bind(i))
+		map_choices.add_child(button)
+	_action("定位  R",_focus_selected)
+	_action("旅途小笺",_map_details)
+	_action("回院",_confirm_retreat)
 	_render_roster()
 
 func _node_reward(node: Dictionary) -> String:
@@ -295,11 +400,12 @@ func _select_node(index: int) -> void:
 	selected_node=index
 	var node: Dictionary = run.candidates[index]
 	globe.focus_cell(int(node.cell))
-	_clear(action_bar)
-	_action("进入 · "+("星心" if node.spring==2 else TYPES[node.type]),_enter_selected)
-	_action("回到落点",_focus_selected)
-	_action("玩法小笺",_help)
-	_note("已定位 %s · %s。确认进入将推进一个时辰。"%[TYPES[node.type],BIOMES.get(node.biome,"草原")])
+	setup_button.text="进入 · "+("星心" if node.spring==2 else TYPES[node.type])
+	setup_button.visible=true
+	for i in map_choices.get_child_count():
+		map_choices.get_child(i).modulate=Color.WHITE if i==index else Color("94aaa5")
+	_note("%s · %s\n进入将推进一个时辰。"%[TYPES[node.type],BIOMES.get(node.biome,"草原")])
+	_layout()
 
 func _focus_selected() -> void:
 	if is_instance_valid(globe) and mode=="map":
@@ -329,45 +435,20 @@ func _show_battle() -> void:
 	arena.setup(sim)
 	world_title.text="%s沙盘  /  %s"%[BIOMES.get(run.chosen.biome,"草原"),"星心 · 眠眠" if run.chosen.spring==2 else ("泉主守心" if run.chosen.type=="boss" else "守心")]
 	world_hint.text="自由布阵  ·  右键收回  /  空格暂停  /  Q 灯照  /  Tab 调速"
-	_text("守住这一盏心灯",CREAM,23)
-	_text("林风轻轻 · 浊从三边靠近" if run.chosen.biome=="forest" else "让浊散去，让露水落下",MUTED,15)
-	heart_readout=_text("心灯  %d / %d"%[int(sim.heart_hp),run.max_hp],GOLD,25)
-	heart_meter=ProgressBar.new()
-	heart_meter.custom_minimum_size.y=9
-	heart_meter.max_value=run.max_hp
-	heart_meter.value=sim.heart_hp
-	heart_meter.show_percentage=false
-	var trough=StyleBoxFlat.new()
-	trough.bg_color=Color("10282c")
-	var fill=StyleBoxFlat.new()
-	fill.bg_color=GOLD
-	heart_meter.add_theme_stylebox_override("background",trough)
-	heart_meter.add_theme_stylebox_override("fill",fill)
-	sidebar.add_child(heart_meter)
-	battle_title=_text("布阵 · 第 1 / 3 波",CREAM,18)
-	dew_readout=_text("露水  %d"%int(sim.dew),Color("8fd0d0"),20)
-	var line=HSeparator.new()
-	sidebar.add_child(line)
-	_text("此刻的伙伴",MUTED,15)
-	var portrait_row=HBoxContainer.new()
-	sidebar.add_child(portrait_row)
-	companion_portrait=TextureRect.new()
-	companion_portrait.custom_minimum_size=Vector2(72,72)
-	companion_portrait.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
-	companion_portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
-	companion_portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait_row.add_child(companion_portrait)
-	companion_name=_label("",21,CREAM)
-	portrait_row.add_child(companion_name)
-	companion_detail=_text("",MUTED,16)
-	_update_companion()
-	_button("替我放好开局阵型",_auto_deploy)
-	_button("布阵与守心 · 小笺",_help)
-	_text("点选伙伴，再点空格放下。
-高台望得远，浅水留给水属性。",MUTED,15)
-	pause_button=_action("开始守心  [空格]",_toggle_pause)
-	speed_button=_action("速度 1×  [Tab]",_cycle_speed)
-	skill_button=_action("灯照  [Q]",_skill)
+	heart_readout.text="心灯  %d / %d"%[int(sim.heart_hp),run.max_hp]
+	battle_title.text="布阵  ·  第 1 / 3 波"
+	dew_readout.text="露水  %d"%int(sim.dew)
+	setup_button.text="开始守心"
+	for spec in [["小笺",_help],["暂停",_toggle_pause],["1×",_cycle_speed]]:
+		var button=Button.new()
+		button.text=spec[0]
+		button.custom_minimum_size=Vector2(62,40)
+		button.pressed.connect(spec[1])
+		top_controls.add_child(button)
+	pause_button=top_controls.get_child(1)
+	speed_button=top_controls.get_child(2)
+	skill_button.text="灯照  Q"
+	skill_button.tooltip_text="消耗6露水，洗净附近的浊并照顾伙伴。"
 	_render_roster()
 
 func _auto_deploy() -> void:
@@ -396,12 +477,14 @@ func _toggle_pause() -> void:
 		sim.start()
 		paused=false
 	else: paused=not paused
-	pause_button.text="继续守心 [空格]" if paused else "暂停 [空格]"
+	pause_button.text="继续" if paused else "暂停"
+	setup_button.visible=false
+	auto_button.visible=false
 
 func _cycle_speed() -> void:
 	if mode!="battle": return
 	speed=2.0 if speed==1.0 else (3.0 if speed==2.0 else 1.0)
-	speed_button.text="速度 %d× [Tab]"%int(speed)
+	speed_button.text="%d×"%int(speed)
 
 func _skill() -> void:
 	if mode!="battle": return
@@ -527,16 +610,16 @@ func _render_roster(yard: bool = false) -> void:
 		var member: Dictionary = members[i]
 		var data: Dictionary = GameData.species(member.id)
 		var card=Button.new()
-		card.custom_minimum_size=Vector2(125,104)
-		card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		card.custom_minimum_size=Vector2(96,92)
+		card.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
 		card.icon=PixelArt.texture(member.id,"idle",0,bool(member.evolved))
 		card.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		card.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP
 		card.expand_icon=true
 		card.add_theme_constant_override("icon_max_width",48)
-		card.add_theme_font_size_override("font_size",15)
+		card.add_theme_font_size_override("font_size",13)
 		var role = str(data.role)
-		card.text="%s · %s\n%s"%[GameData.display_name(member),role,"Lv.%d%s"%[int(member.level)," · 已化形" if member.evolved else ""] if not yard else ("可出发" if member.id in run.meta.unlocked else "待结缘")]
+		card.text="%d  %s\n%s"%[i+1,GameData.display_name(member),"Lv.%d · %s"%[int(member.level),role] if not yard else ("可出发" if member.id in run.meta.unlocked else "待结缘")]
 		card.tooltip_text="%s · %s\n%s\n点选后部署；地图上等级达到3可免费化形。"%[GameData.display_name(member),role,data.description]
 		if yard:
 			card.disabled=not member.id in run.meta.unlocked
@@ -553,6 +636,7 @@ func _render_roster(yard: bool = false) -> void:
 				selected_style.content_margin_bottom=8
 				card.add_theme_stylebox_override("normal",selected_style)
 		roster.add_child(card)
+	_layout()
 
 func _choose_starter(id: String) -> void:
 	if id in run.starters:
@@ -565,7 +649,7 @@ func _select_team(index: int) -> void:
 	selected_team=index
 	if mode=="battle":
 		arena.set_selected(index)
-		_update_companion()
+
 		_note("已选择 %s：点击空格部署 / 换位；点原来的睡眠格唤醒。"%GameData.species(run.team[index].id).name)
 	elif mode in ["map","reward","service"]:
 		if run.evolve(index): _note("%s 化形了！新的模样，新的力量。"%GameData.species(run.team[index].id).name)
@@ -632,12 +716,16 @@ func _process(delta: float) -> void:
 				sim.step(dt)
 				remaining-=dt
 		arena.refresh(delta if not paused else 0.0)
+		_refresh_slot_states()
+		pause_button.disabled=not sim.running
 		if is_instance_valid(battle_title):
 			battle_title.text="%s  ·  第 %d / %d 波"%["暂停" if paused else ("守心中" if sim.running else "布阵"),maxi(1,sim.wave),sim.total_waves]
 			heart_readout.text="心灯  %d / %d"%[int(sim.heart_hp),run.max_hp]
-			heart_meter.value=sim.heart_hp
+			hud_chrome.hp_ratio=float(sim.heart_hp)/run.max_hp
+			hud_chrome.cooldown_ratio=sim.skill_cooldown/15.0
+			hud_chrome.queue_redraw()
 			dew_readout.text="露水  %d"%int(sim.dew)
-		if is_instance_valid(skill_button): skill_button.text="灯照 %s [Q]"%("%.0fs"%sim.skill_cooldown if sim.skill_cooldown>0 else "就绪")
+		if is_instance_valid(skill_button): skill_button.text="%s\nQ · 灯照"%("%.0fs"%sim.skill_cooldown if sim.skill_cooldown>0 else "6 露水")
 		if sim.finished and not settled: _battle_finished()
 	elif mode in ["reward","service"] and is_instance_valid(arena): arena.refresh(delta)
 	if mode=="yard": status.text="小院  ·  星砂 %d"%int(run.meta.sand)
@@ -681,3 +769,25 @@ func _update_companion() -> void:
 	companion_portrait.texture=PixelArt.texture(member.id,"idle",0,bool(member.evolved))
 	companion_name.text="%s\n%s · %s  /  Lv.%d"%[GameData.display_name(member),data.element,data.role,int(member.level)]
 	companion_detail.text=data.description
+
+func _map_details() -> void:
+	var dialog=AcceptDialog.new()
+	dialog.title="苔眠星 · 旅途小笺"
+	var lines:PackedStringArray=[run.time_label(),run.last_message,"", "三口浊泉"]
+	for i in run.planet.springs.size():
+		var spring:Dictionary=run.planet.springs[i]
+		lines.append("%s：%s"%["星心" if i==2 else "浊泉%d"%(i+1),"已封为清泉" if spring.sealed else "泉力 Lv.%d"%spring.level])
+	lines.append("\n伙伴3级可在地图点卡片化形。封两泉并到繁茂后挑战眠眠。")
+	dialog.dialog_text="\n".join(lines)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(620,340))
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+
+func _refresh_slot_states() -> void:
+	for i in mini(roster.get_child_count(),run.team.size()):
+		var member:Dictionary=run.team[i]
+		var unit:Dictionary=sim._find_unit(i)
+		var state="免费" if not sim.running else "4露增援"
+		if not unit.is_empty(): state="4露唤醒" if unit.hp<=0 else ("在阵 / 2露" if sim.running else "已就位")
+		roster.get_child(i).text="%d %s\n%s"%[i+1,GameData.display_name(member),state]

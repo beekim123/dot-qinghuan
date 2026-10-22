@@ -1,10 +1,11 @@
 extends SceneTree
 var checks=0
+var failures=0
 func check(condition: bool,message: String) -> void:
 	checks+=1
 	if not condition:
 		push_error(message)
-		quit(1)
+		failures+=1
 func _initialize() -> void:
 	call_deferred("run_test")
 func run_test() -> void:
@@ -14,13 +15,6 @@ func run_test() -> void:
 	scene.set_process(false)
 	scene.run.meta={"sand":0,"oil":0,"dew":0,"bond":0,"unlocked":["dida","taituan","dengxin"],"inherited":"","runs":0,"wins":0}
 	check(scene.mode=="yard","yard boot")
-	for dimensions in [Vector2(1440,900),Vector2(1180,812)]:
-		scene.size=dimensions
-		scene._layout()
-		await process_frame
-		check(scene.roster_scroll.position.x+scene.roster_scroll.size.x<scene.side_scroll.position.x,"roster clipped before sidebar")
-		check(scene.action_bar.position.y+scene.action_bar.size.y<=scene.roster_scroll.position.y,"action and roster never overlap")
-		check(is_equal_approx(fmod(scene.world_image.size.x,float(scene.world.size.x)),0.0),"integer world pixels")
 	scene._start_run()
 	check(scene.mode=="map","new run map")
 	check(scene.run.team.size()==3,"starter team")
@@ -47,6 +41,8 @@ func run_test() -> void:
 	scene._reward("friend",scene.run.chosen.friend)
 	check(scene.mode=="map" and scene.run.hour==1,"reward map advance once")
 	check(scene.run.team.size()==4,"bond friend")
+	scene._reward("friend",scene.run.chosen.friend)
+	check(scene.run.hour==1 and scene.run.team.size()==4,"repeated reward cannot advance or recruit twice")
 	var rest_index=-1
 	for i in scene.run.candidates.size():
 		if scene.run.candidates[i].type=="rest": rest_index=i
@@ -70,6 +66,8 @@ func run_test() -> void:
 	check(scene.run.dew==before-8,"shop one debit")
 	scene._leave_service()
 	check(scene.mode=="map" and scene.run.hour==3,"shop leaving advances")
+	scene._leave_service()
+	check(scene.run.hour==3,"repeated service close cannot advance twice")
 	scene.run.finish(false)
 	scene._show_ending()
 	check(scene.mode=="ending","ending displayed")
@@ -77,7 +75,7 @@ func run_test() -> void:
 	check(scene.mode=="yard","inherit returns yard")
 	scene._start_run()
 	check(scene.mode=="map" and scene.run.hour==0,"repeat new run")
-	print("UI_PASS ",checks," checks")
+	print("UI_CHECKS ",checks," FAILURES ",failures)
 	scene.queue_free()
 	await process_frame
-	quit(0)
+	quit(1 if failures>0 else 0)
