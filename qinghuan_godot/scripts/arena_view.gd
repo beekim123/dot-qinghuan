@@ -20,6 +20,7 @@ var _path_clock: float = 0.0
 var _heart_sprite: Sprite3D
 var _last_heart: int = 0
 var _bar_cache: Dictionary = {}
+const Decor = preload("res://scripts/arena_decor.gd")
 
 func setup(battle: BattleSim) -> void:
 	sim = battle
@@ -35,25 +36,25 @@ func setup(battle: BattleSim) -> void:
 	var environment := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("262b44")
+	env.background_color = Color("181f2e")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("c0cbdc")
-	env.ambient_light_energy = 0.7
+	env.ambient_light_color = Color("8b9bb4")
+	env.ambient_light_energy = 0.72
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	environment.environment = env
 	add_child(environment)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, -35, 0)
-	sun.light_color = Color("ead4aa")
-	sun.light_energy = 1.0
+	sun.light_color = Color("e8b796")
+	sun.light_energy = 0.85
 	sun.shadow_enabled = true
 	add_child(sun)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 10.8
+	camera.size = 10.7
 	camera.position = Vector3(7.8, 16.4, 16.2)
 	add_child(camera)
-	camera.look_at(Vector3(0, 0.0, 0))
+	camera.look_at(Vector3(0, -0.1, 0))
 	camera.current = true
 	_terrain_root = Node3D.new()
 	add_child(_terrain_root)
@@ -101,32 +102,42 @@ func _tile_color(terrain: String) -> Color:
 		"snow": return Color("c0cbdc")
 	return Color("63c74d")
 
-func _tile_texture(terrain: String, clean: bool) -> ImageTexture:
-	var im := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+func _tile_texture(terrain: String, clean: bool, cell: Vector2i = Vector2i.ZERO) -> ImageTexture:
+	var im := Image.create(32,32,false,Image.FORMAT_RGBA8)
 	var base := _tile_color(terrain)
-	if not clean:
-		base = base.lerp(Color("5a6988"), 0.42)
+	if terrain in ["grass","forest"]:
+		base = Color("3e8948").lerp(Color("63c74d"),0.27 if terrain=="grass" else 0.08)
+	if not clean: base = base.lerp(Color("5a6988"),0.18)
 	im.fill(base)
-	# A few authored clusters suggest the material without visual noise.
-	var shade := base.darkened(0.13)
-	var light := base.lightened(0.12)
-	if terrain == "water" or terrain == "deep":
-		for row in [4, 11]:
-			for x in range(3, 8): im.set_pixel(x + (4 if row == 11 else 0), row, light)
-		im.set_pixel(8, 3, light)
-	elif terrain == "sand":
-		for p in [Vector2i(4,5),Vector2i(5,5),Vector2i(10,11),Vector2i(11,11)]: im.set_pixelv(p, shade)
-	elif terrain == "high":
-		for x in range(3, 10): im.set_pixel(x, 10, shade)
-		for y in range(4, 10): im.set_pixel(10, y, light)
-	else:
-		for p in [Vector2i(3,11),Vector2i(4,10),Vector2i(4,11),Vector2i(11,4),Vector2i(11,5),Vector2i(12,5)]: im.set_pixelv(p, shade)
-		for p in [Vector2i(5,10),Vector2i(12,4)]: im.set_pixelv(p, light)
+	# Continuous world-space patches cross cells; no checkerboard or random confetti.
+	for y in range(32):
+		for x in range(32):
+			var gx := cell.x*32+x
+			var gy := cell.y*32+y
+			var bands := sin(float(gx)*0.038+sin(float(gy)*0.046)*1.5)+cos(float(gy)*0.034+0.6)
+			var col := base
+			if terrain in ["grass","forest"]:
+				if bands>1.14: col=base.lerp(Color("265c42"),0.32)
+				elif bands< -0.8: col=base.lerp(Color("63c74d"),0.24)
+				# Connected russet earth clearing, avoiding route-shaped decoration.
+				var r := pow((float(gx)-176.0)/87.0,2)+pow((float(gy)-116.0)/69.0,2)
+				if r<0.65+0.12*sin(float(gx/4)*0.34): col=base.lerp(Color("b86f50"),0.37)
+			elif terrain in ["water","deep"]:
+				col=base.lerp(Color("124e89"),0.2 if bands>0 else 0.0)
+				if (gy%15 in [3,4]) and gx%29 in range(6,17): col=Color("2ce8f5").lerp(base,0.4)
+			elif terrain=="sand":
+				if bands>0.8: col=base.lerp(Color("d77643"),0.16)
+			elif terrain=="high":
+				if y in [9,10] and x<20 or x in [20,21] and y<10: col=base.darkened(0.22)
+			im.set_pixel(x,y,col)
+	# Sparse corner notches are much quieter than dashed permanent grid lines.
+	if terrain not in ["water","deep"]:
+		var cue := base.darkened(0.09)
+		im.fill_rect(Rect2i(0,0,3,1),cue);im.fill_rect(Rect2i(0,0,1,3),cue)
 	return ImageTexture.create_from_image(im)
 
 func _build_terrain() -> void:
-	var bottom := _mat(Color("3e2731"))
-	_box(Vector3(0, -0.68, 0), Vector3(sim.width + 0.14, 0.22, sim.height + 0.14), bottom, _terrain_root)
+	_build_island()
 	for y in range(sim.height):
 		for x in range(sim.width):
 			var cell := Vector2i(x, y)
@@ -135,29 +146,33 @@ func _build_terrain() -> void:
 			var h := _height(cell)
 			var position3 := _world(Vector2(cell), h)
 			var sides := _mat(Color("733e39") if terrain != "high" else Color("5a6988"))
-			_box(position3 + Vector3(0, -(h + 0.6) * 0.5, 0), Vector3(0.98, h + 0.6, 0.98), sides, _terrain_root)
+			_box(position3 + Vector3(0, -(h + 0.6) * 0.5, 0), Vector3(1.0, h + 0.6, 1.0), sides, _terrain_root)
 			var dirty := _mat(Color.WHITE)
-			dirty.albedo_texture = _tile_texture(terrain, false)
+			dirty.albedo_texture = _tile_texture(terrain, false,cell)
 			dirty.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 			var clean := _mat(Color.WHITE)
-			clean.albedo_texture = _tile_texture(terrain, true)
+			clean.albedo_texture = _tile_texture(terrain, true,cell)
 			clean.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-			var top := _box(position3 + Vector3(0,0.025,0), Vector3(0.97,0.05,0.97), dirty, _terrain_root)
+			var top := _box(position3 + Vector3(0,0.025,0), Vector3(1.001,0.05,1.001), dirty, _terrain_root)
 			_tile_meshes.append(top)
 			_dirty_materials.append(dirty)
 			_clean_materials.append(clean)
 			if str(t.get("obstacle", "")) != "":
-				var obstacle := _sprite(str(t.obstacle), 0.047)
-				obstacle.position = position3 + Vector3(0, 0.58, 0)
+				var obstacle := _sprite(str(t.obstacle), 0.052)
+				obstacle.position = position3 + camera.global_basis.y * ((9.5 if str(t.obstacle)=="tree" else 8.5)*0.052)
 				_terrain_root.add_child(obstacle)
 				_shadow(position3 + Vector3(0,0.058,0), 0.65, _terrain_root)
+			if terrain in ["water","deep"]: _shore(cell,position3)
+			if terrain=="high":
+				_box(position3+Vector3(0,-0.05,0),Vector3(1.02,0.08,1.02),_mat(Color("c0cbdc")),_terrain_root)
 			if bool(t.get("dew", false)):
-				var ring := _outline(Color("2ce8f5"), 0.62)
-				ring.position = position3 + Vector3(0,0.065,0)
-				_terrain_root.add_child(ring)
+				# Dew eyes are small spring ripples, never neon square pads.
+				for j in range(3):
+					_box(position3+Vector3(0,0.058,float(j-1)*0.13),Vector3(0.40-abs(j-1)*0.12,0.008,0.035),_mat(Color("2ce8f5"),true),_terrain_root)
+
 	for entrance in sim.entrances:
 		var c: Vector2i = entrance
-		var root := _outline(Color("b55088"), 0.8)
+		var root := _entrance_mark()
 		root.position = _world(Vector2(c), _height(c) + 0.08)
 		_terrain_root.add_child(root)
 		# Stepped inward arrow, not a permanent lane.
@@ -167,8 +182,8 @@ func _build_terrain() -> void:
 			_box(a + Vector3(inward.x,0,inward.y) * (float(k)-1.0) * 0.13, Vector3(0.34-float(k)*0.08,0.04,0.10), _mat(Color("b55088"),true),_terrain_root)
 	var heart_pos := _world(Vector2(sim.heart),_height(sim.heart))
 	_box(heart_pos+Vector3(0,0.06,0),Vector3(0.72,0.12,0.72),_mat(Color("d77643")),_terrain_root)
-	_heart_sprite = _sprite("heart", 0.052)
-	_heart_sprite.position = heart_pos + Vector3(0,0.77,0)
+	_heart_sprite = _sprite("heart", 0.061)
+	_heart_sprite.position = heart_pos + Vector3(0,0.12,0) + camera.global_basis.y * (10.5*0.061)
 	_terrain_root.add_child(_heart_sprite)
 	var glow := OmniLight3D.new()
 	glow.position = heart_pos+Vector3(0,1.1,0)
@@ -237,8 +252,9 @@ func screen_to_cell(viewport_pos: Vector2) -> Vector2i:
 func _make_actor(key: String, id: String, enemy: bool) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var sprite := _sprite(id,0.048 if id != "mianmian" else 0.055)
-	sprite.position.y = 0.64 if id != "mianmian" else 0.86
+	var sprite := _sprite(id,0.060 if id != "mianmian" else 0.065)
+	var foot := 8.5 if id in ["mianmian","spring"] else 7.5 if id=="murk" else 8.5 if id=="big" else 10.5
+	sprite.position = camera.global_basis.y * (foot*sprite.pixel_size) + Vector3(0,0.06,0)
 	root.add_child(sprite)
 	_shadow(Vector3(0,0.07,0),0.62 if id != "mianmian" else 0.95,root)
 	var bar := Sprite3D.new()
@@ -324,7 +340,7 @@ func _update_actor(data: Dictionary, actor: Dictionary) -> void:
 func _refresh_paths() -> void:
 	if not is_instance_valid(_paths_root): return
 	for child in _paths_root.get_children(): child.queue_free()
-	if sim.running and hover_cell.x<0: return
+	if hover_cell.x<0: return
 	if sim.finished: return
 	# Small pale pebbles indicate a live prediction only while arranging/hovering.
 	var material := _mat(Color("c0cbdc"),true)
@@ -379,3 +395,120 @@ func _update_effects(delta: float) -> void:
 		if t>=1.0:
 			fx.node.queue_free()
 			_effects.remove_at(i)
+
+func _island_outline() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-6.2,-3.2),Vector2(-5.8,-4.1),Vector2(-4.7,-4.2),Vector2(-4.1,-4.65),
+		Vector2(-2.7,-4.55),Vector2(-1.9,-4.85),Vector2(-0.4,-4.55),Vector2(0.8,-4.8),
+		Vector2(2.0,-4.45),Vector2(3.4,-4.65),Vector2(4.6,-4.2),Vector2(5.8,-3.9),
+		Vector2(6.1,-2.9),Vector2(6.65,-2.2),Vector2(6.45,-0.8),Vector2(6.8,0.1),
+		Vector2(6.25,1.2),Vector2(6.45,2.45),Vector2(5.85,3.55),Vector2(4.8,4.05),
+		Vector2(3.7,4.4),Vector2(2.5,4.15),Vector2(1.4,4.55),Vector2(0.3,4.2),
+		Vector2(-1.0,4.4),Vector2(-2.1,4.15),Vector2(-3.3,4.55),Vector2(-4.6,4.1),
+		Vector2(-5.7,3.7),Vector2(-6.35,2.7),Vector2(-6.2,1.45),Vector2(-6.65,0.4),
+		Vector2(-6.25,-0.7),Vector2(-6.5,-1.8)])
+
+func _island_layer(points: PackedVector2Array, top: float, bottom: float, scale_bottom: float, top_color: Color, side_color: Color) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var indices := Geometry2D.triangulate_polygon(points)
+	for i in range(0,indices.size(),3):
+		for k in [0,2,1]:
+			var p := points[indices[i+k]]
+			st.set_normal(Vector3.UP);st.set_color(top_color);st.add_vertex(Vector3(p.x,top,p.y))
+	for i in range(points.size()):
+		var p := points[i]
+		var q := points[(i+1)%points.size()]
+		var a := Vector3(p.x,top,p.y)
+		var b := Vector3(q.x,top,q.y)
+		var c := Vector3(q.x*scale_bottom,bottom,q.y*scale_bottom)
+		var d := Vector3(p.x*scale_bottom,bottom,p.y*scale_bottom)
+		var normal := (b-a).cross(d-a).normalized()
+		var col := side_color.lightened(0.06 if i%4==0 else 0.0)
+		for v in [a,b,c,a,c,d]:
+			st.set_normal(normal);st.set_color(col);st.add_vertex(v)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh=st.commit()
+	var mat := _mat(Color.WHITE)
+	mat.vertex_color_use_as_albedo=true
+	mat.cull_mode=BaseMaterial3D.CULL_DISABLED
+	mesh.material_override=mat
+	_terrain_root.add_child(mesh)
+
+func _build_island() -> void:
+	var points := _island_outline()
+	var is_forest := sim.biome in ["forest","grass"]
+	var soil := Color("3e8948") if is_forest else Color("d77643") if sim.biome=="sand" else Color("5a6988")
+	_island_layer(points,-0.035,-0.26,0.992,soil,Color("265c42") if is_forest else soil.darkened(0.25))
+	_island_layer(points,-0.26,-0.72,0.98,Color("733e39"),Color("733e39"))
+	var inset := PackedVector2Array()
+	for p in points: inset.append(p*0.98)
+	_island_layer(inset,-0.72,-1.06,0.97,Color("3e2731"),Color("3e2731"))
+	var rockline := PackedVector2Array()
+	for p in points: rockline.append(p*0.95)
+	_island_layer(rockline,-1.06,-1.45,0.94,Color("3a4466"),Color("262b44"))
+	# Roots, stone shelves and hanging moss break the regular cliff silhouette.
+	for i in range(0,points.size(),2):
+		var p := points[i]
+		var q := points[(i+1)%points.size()]
+		var c := (p+q)*0.5
+		var rock := _box(Vector3(c.x,-0.88,c.y),Vector3(0.48+float(i%3)*0.12,0.16,0.28),_mat(Color("5a6988")),_terrain_root)
+		rock.rotation.y=atan2(q.y-p.y,q.x-p.x)
+		if is_forest and i%4==0:
+			_box(Vector3(c.x,-0.28,c.y),Vector3(0.13,0.56,0.14),_mat(Color("265c42")),_terrain_root)
+			_box(Vector3(c.x+0.11,-0.53,c.y+0.04),Vector3(0.13,0.31,0.12),_mat(Color("193c3e")),_terrain_root)
+	if is_forest:
+		for spec in [[-5.85,-3.4,0.052],[-4.1,-4.5,0.047],[-1.85,-4.75,0.056],[1.5,-4.7,0.047],[4.5,-4.1,0.052],[6.15,-2.0,0.050]]:
+			_decor_sprite("tree",Vector3(spec[0],0.0,spec[1]),spec[2],int(absf(spec[0])*2)%2)
+		for spec in [[-5.8,2.8],[-5.95,-0.7],[-3.8,3.95],[-2.4,-4.05],[3.7,3.9],[5.9,1.8],[5.7,-3.2]]:
+			_decor_sprite("fern",Vector3(spec[0],0.02,spec[1]),0.027)
+		for spec in [[-4.7,-4.0],[3.6,-4.2],[-5.7,1.9],[4.9,3.6]]:
+			_decor_sprite("mushroom",Vector3(spec[0],0.02,spec[1]),0.020)
+		for spec in [[-1.2,3.9],[2.3,3.9],[-5.9,-2.5],[5.8,-0.8]]:
+			_decor_sprite("flowers",Vector3(spec[0],0.02,spec[1]),0.019)
+	# Low ferns and shore stones never occupy a legal playable tile.
+	for x in range(-5,6,2):
+		_decor_sprite("grass",Vector3(float(x)+0.2,0.01,3.95),0.024)
+	if sim.biome in ["forest","lake","grass"]: _outside_pool()
+
+func _decor_sprite(kind:String,pos:Vector3,pixel:float,variant:int=0)->void:
+	var sprite := Sprite3D.new()
+	sprite.texture=Decor.texture(kind,variant)
+	sprite.pixel_size=pixel
+	sprite.texture_filter=BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	sprite.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
+	sprite.shaded=false
+	# Source y=53 is the foot; billboard foreshortening compensation keeps it grounded.
+	sprite.position=pos+camera.global_basis.y*(25.5*pixel)
+	_terrain_root.add_child(sprite)
+	_shadow(pos+Vector3(0,0.012,0),0.75 if kind=="tree" else 0.3,_terrain_root)
+
+func _outside_pool()->void:
+	# A shallow side pocket outside x=-5.5: decorative shoreline, not a false deploy cell.
+	var water := _mat(Color("124e89"))
+	_box(Vector3(-6.0,-0.018,0.5),Vector3(0.7,0.025,1.8),water,_terrain_root)
+	_box(Vector3(-5.85,-0.005,0.4),Vector3(0.52,0.025,1.35),_mat(Color("0099db")),_terrain_root)
+	for i in range(4):
+		_box(Vector3(-5.88,0.015,-0.1+float(i)*0.35),Vector3(0.30,0.008,0.028),_mat(Color("2ce8f5")),_terrain_root)
+	for p in [Vector3(-5.67,0.04,-0.5),Vector3(-5.75,0.03,1.4),Vector3(-6.27,0.05,0.4)]:
+		var stone := _sprite("rock",0.022)
+		stone.position=p+camera.global_basis.y*(8.5*0.022)
+		_terrain_root.add_child(stone)
+
+func _shore(cell:Vector2i,pos:Vector3)->void:
+	for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+		var other:Vector2i=cell+d
+		if other.x<0 or other.x>=sim.width or other.y<0 or other.y>=sim.height: continue
+		if str(sim.tiles[other.y*sim.width+other.x].terrain) not in ["water","deep"]:
+			var width := Vector3(0.10,0.055,0.95) if d.x!=0 else Vector3(0.95,0.055,0.10)
+			_box(pos+Vector3(d.x*0.44,0.06,d.y*0.44),width,_mat(Color("e4a672")),_terrain_root)
+			_box(pos+Vector3(d.x*0.35,0.059,d.y*0.35),Vector3(width.x,0.01,width.z)*Vector3(0.8,1,0.8),_mat(Color("2ce8f5")),_terrain_root)
+
+func _entrance_mark()->Node3D:
+	var root := Node3D.new()
+	# Broken standing portal stones imply an arrival point without neon cell outlines.
+	for x in [-0.30,0.30]:
+		_box(Vector3(x,0.13,0),Vector3(0.12,0.24,0.20),_mat(Color("68386c")),root)
+		_box(Vector3(x,0.26,0),Vector3(0.08,0.035,0.16),_mat(Color("b55088"),true),root)
+	return root

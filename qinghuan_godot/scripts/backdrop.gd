@@ -3,10 +3,14 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(queue_redraw)
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO,size),Color("181425"))
-	for i in 6:
-		draw_rect(Rect2(0,i*size.y/6,size.x,size.y/6+1),Color("262b44").lerp(Color("181425"),float(i)/6.0))
-	for i in 75:
-		var p = Vector2(fmod(i*137.0+31,size.x),fmod(i*i*61.0+77,size.y))
-		draw_rect(Rect2(p,Vector2(2 if i%5 else 3,2 if i%5 else 3)),Color("5a6988") if i%3 else Color("c0cbdc"))
-	draw_line(Vector2(24,92),Vector2(size.x-24,92),Color("3a4466"),2)
+	draw_rect(Rect2(Vector2.ZERO,size),Color("13292d"))
+	draw_rect(Rect2(0,0,size.x,82),Color("193337"))
+	draw_rect(Rect2(28,80,size.x-56,2),Color("35504a"))
+	# Deliberate stepped leaf silhouettes frame the interface, not scattered noise.
+	for i in 5:
+		var x=28+i*18
+		var y=size.y-24-i*8
+		draw_rect(Rect2(x,y,8,4),Color("345047"))
+		draw_rect(Rect2(x+4,y-4,12,4),Color("345047"))
+	for i in 4:
+		draw_rect(Rect2(size.x-48-i*12,26+i*6,8,4),Color("47634f"))

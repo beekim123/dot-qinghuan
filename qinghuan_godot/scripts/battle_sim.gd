@@ -69,10 +69,43 @@ func setup(config: Dictionary) -> void:
    for tile in tiles:
     tile.obstacle = ""
     if tile.terrain in ["water", "high", "deep"]: tile.terrain = "grass"; tile.height = 0.0
+ if biome == "forest":
+  _forest_landforms()
  for c in [Vector2i(3,4),Vector2i(7,2)]:
   tiles[_index(c)].dew = true
   tiles[_index(c)].obstacle = ""
   tiles[_index(c)].terrain = "grass"
+
+
+# Compact authored landform footprints, mirrored by the encounter seed.
+# Grass knolls are gentle walkable steps, not the impassable "high" platforms.
+func _forest_landforms() -> void:
+ var mirror_x: bool = _rng.randf() < 0.5
+ var mirror_y: bool = _rng.randf() < 0.5
+ var water_count: int = _rng.randi_range(2,4)
+ var pocket: Array = [Vector2i(0,0),Vector2i(1,0),Vector2i(0,1),Vector2i(1,1)]
+ for i in range(water_count):
+  var cell: Vector2i = pocket[i]
+  if mirror_x: cell.x = width-1-cell.x
+  if mirror_y: cell.y = height-1-cell.y
+  var tile: Dictionary = tiles[_index(cell)]
+  tile.terrain = "water"
+  tile.height = 0.0
+  tile.obstacle = ""
+ var knoll: Array = [Vector2i(8,1),Vector2i(9,1),Vector2i(9,2)]
+ for i in range(knoll.size()):
+  var cell: Vector2i = knoll[i]
+  if mirror_x: cell.x = width-1-cell.x
+  if mirror_y: cell.y = height-1-cell.y
+  var tile: Dictionary = tiles[_index(cell)]
+  tile.terrain = "forest"
+  tile.height = 0.4 if i == 1 else 0.25
+  tile.obstacle = ""
+ # The corner pool must never turn incidental tree clutter into a sealed arena.
+ # Remove only decorative blockers if necessary, retaining the coherent pool.
+ for entrance in entrances:
+  if _path(entrance, {}).is_empty():
+   for tile in tiles: tile.obstacle = ""
 
 func _index(cell: Vector2i) -> int:
  return cell.y * width + cell.x

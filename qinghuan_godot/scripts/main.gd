@@ -1,10 +1,10 @@
 extends Control
 
 const BG = preload("res://scripts/backdrop.gd")
-const CREAM = Color("ead4aa")
-const MUTED = Color("8b9bb4")
-const MINT = Color("63c74d")
-const GOLD = Color("fee761")
+const CREAM = Color("e3e5d3")
+const MUTED = Color("94aaa5")
+const MINT = Color("a2c584")
+const GOLD = Color("e4b96b")
 const BIOMES = {"grass":"草原","forest":"林间","lake":"湖畔","mountain":"山脚","sand":"沙岸","snow":"雪坡","water":"湖畔"}
 const TYPES = {"battle":"守心","rest":"露泉","shop":"行商","boss":"封泉"}
 var run = RunState.new()
@@ -42,6 +42,13 @@ var toast_timer: float = 0.0
 var battle_title: Label
 var yard_preview: PlanetModel
 var ui_clock: float = 0.0
+var side_panel: Panel
+var heart_meter: ProgressBar
+var heart_readout: Label
+var dew_readout: Label
+var companion_portrait: TextureRect
+var companion_name: Label
+var companion_detail: Label
 
 func _ready() -> void:
 	DisplayServer.window_set_min_size(Vector2i(1120,760))
@@ -64,11 +71,13 @@ func _build_theme() -> void:
 	t.set_color("font_disabled_color","Button",Color("5a6988"))
 	for style in ["normal","hover","pressed","disabled","focus"]:
 		var s = StyleBoxFlat.new()
-		s.bg_color = Color("3a4466") if style=="hover" else Color("262b44")
-		if style=="pressed": s.bg_color=Color("265c42")
+		s.bg_color = Color("36534e") if style=="hover" else Color("243d3b")
+		if style=="pressed": s.bg_color=Color("3c6152")
 		if style=="disabled": s.bg_color=Color("181425")
-		s.border_color = Color("63c74d") if style in ["hover","focus","pressed"] else Color("5a6988")
-		s.set_border_width_all(2 if style=="focus" else 1)
+		s.border_color = Color("a2c584") if style in ["hover","focus","pressed"] else Color("48615a")
+		s.set_border_width_all(0)
+		s.border_width_bottom=3
+		if style=="focus": s.set_border_width_all(2)
 		s.content_margin_left=14
 		s.content_margin_right=14
 		s.content_margin_top=10
@@ -83,7 +92,7 @@ func _build_shell() -> void:
 	bg.set_script(BG)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	header = _label("清欢小星",30,GOLD)
+	header = _label("清欢小星",25,CREAM)
 	header.position=Vector2(32,18)
 	add_child(header)
 	subtitle = _label("一盏小灯，慢慢把星球养回绿色。",16,MUTED)
@@ -106,10 +115,18 @@ func _build_shell() -> void:
 	world_image.mouse_filter=Control.MOUSE_FILTER_STOP
 	world_image.gui_input.connect(_world_input)
 	add_child(world_image)
-	world_title=_label("",21,GOLD)
+	world_title=_label("",21,CREAM)
 	add_child(world_title)
 	world_hint=_label("",15,MUTED)
 	add_child(world_hint)
+	side_panel=Panel.new()
+	var paper=StyleBoxFlat.new()
+	paper.bg_color=Color("1c3334")
+	paper.border_color=Color("416052")
+	paper.border_width_top=3
+	side_panel.add_theme_stylebox_override("panel",paper)
+	side_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	add_child(side_panel)
 	side_scroll=ScrollContainer.new()
 	side_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(side_scroll)
@@ -140,8 +157,10 @@ func _layout() -> void:
 	world_title.position=Vector2(32,100)
 	world_hint.position=Vector2(world_image.position.x,world_image.position.y+world_image.size.y+5)
 	world_hint.size=Vector2(available,25)
-	side_scroll.position=Vector2(size.x-358,112)
-	side_scroll.size=Vector2(330,size.y-164)
+	side_panel.position=Vector2(size.x-368,104)
+	side_panel.size=Vector2(348,size.y-138)
+	side_scroll.position=Vector2(size.x-350,124)
+	side_scroll.size=Vector2(312,size.y-180)
 	status.position=Vector2(size.x-650,29)
 	status.size=Vector2(620,45)
 	action_bar.position=Vector2(32,world_image.position.y+world_image.size.y+29)
@@ -309,15 +328,43 @@ func _show_battle() -> void:
 	_replace_world(arena)
 	arena.setup(sim)
 	world_title.text="%s沙盘  /  %s"%[BIOMES.get(run.chosen.biome,"草原"),"星心 · 眠眠" if run.chosen.spring==2 else ("泉主守心" if run.chosen.type=="boss" else "守心")]
-	world_hint.text="选下方小妖 → 点合法空格布阵  ·  右键收回  ·  空格暂停  ·  Q 灯照  ·  Tab 调速"
-	_text("把小灯放在心里",GOLD,25)
-	battle_title=_text("布阵阶段 · 尚未开战",MINT,20)
-	_text("心在中央，浊会从三边来。没有固定路线：你的阵型会改变通路。",MUTED)
-	_text("自由布阵",CREAM,19)
-	_text("所有定位都能站在合法空格。\n浅水只适合水属性；高台增加射程。树石、入口和心不可部署。\n若封死任一入口或活着的地面浊的通路，操作会被拒绝。",MUTED,16)
-	_button("推荐开局布阵",_auto_deploy)
-	_text("小妖困了会睡着，不会离开。选中它再点原格，花 4 露水唤醒。\n战斗中增援、换位花露水，暂停时也能操作。",MUTED,16)
-	_text("灯照：消耗露水，净化附近的浊并照顾伙伴。请留意冷却。",CREAM,16)
+	world_hint.text="自由布阵  ·  右键收回  /  空格暂停  /  Q 灯照  /  Tab 调速"
+	_text("守住这一盏心灯",CREAM,23)
+	_text("林风轻轻 · 浊从三边靠近" if run.chosen.biome=="forest" else "让浊散去，让露水落下",MUTED,15)
+	heart_readout=_text("心灯  %d / %d"%[int(sim.heart_hp),run.max_hp],GOLD,25)
+	heart_meter=ProgressBar.new()
+	heart_meter.custom_minimum_size.y=9
+	heart_meter.max_value=run.max_hp
+	heart_meter.value=sim.heart_hp
+	heart_meter.show_percentage=false
+	var trough=StyleBoxFlat.new()
+	trough.bg_color=Color("10282c")
+	var fill=StyleBoxFlat.new()
+	fill.bg_color=GOLD
+	heart_meter.add_theme_stylebox_override("background",trough)
+	heart_meter.add_theme_stylebox_override("fill",fill)
+	sidebar.add_child(heart_meter)
+	battle_title=_text("布阵 · 第 1 / 3 波",CREAM,18)
+	dew_readout=_text("露水  %d"%int(sim.dew),Color("8fd0d0"),20)
+	var line=HSeparator.new()
+	sidebar.add_child(line)
+	_text("此刻的伙伴",MUTED,15)
+	var portrait_row=HBoxContainer.new()
+	sidebar.add_child(portrait_row)
+	companion_portrait=TextureRect.new()
+	companion_portrait.custom_minimum_size=Vector2(72,72)
+	companion_portrait.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
+	companion_portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	companion_portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_row.add_child(companion_portrait)
+	companion_name=_label("",21,CREAM)
+	portrait_row.add_child(companion_name)
+	companion_detail=_text("",MUTED,16)
+	_update_companion()
+	_button("替我放好开局阵型",_auto_deploy)
+	_button("布阵与守心 · 小笺",_help)
+	_text("点选伙伴，再点空格放下。
+高台望得远，浅水留给水属性。",MUTED,15)
 	pause_button=_action("开始守心  [空格]",_toggle_pause)
 	speed_button=_action("速度 1×  [Tab]",_cycle_speed)
 	skill_button=_action("灯照  [Q]",_skill)
@@ -486,7 +533,7 @@ func _render_roster(yard: bool = false) -> void:
 		card.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		card.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP
 		card.expand_icon=true
-		card.add_theme_constant_override("icon_max_width",44)
+		card.add_theme_constant_override("icon_max_width",48)
 		card.add_theme_font_size_override("font_size",15)
 		var role = str(data.role)
 		card.text="%s · %s\n%s"%[GameData.display_name(member),role,"Lv.%d%s"%[int(member.level)," · 已化形" if member.evolved else ""] if not yard else ("可出发" if member.id in run.meta.unlocked else "待结缘")]
@@ -498,9 +545,10 @@ func _render_roster(yard: bool = false) -> void:
 			card.pressed.connect(_select_team.bind(i))
 			if i==selected_team:
 				var selected_style=StyleBoxFlat.new()
-				selected_style.bg_color=Color("193c3e")
+				selected_style.bg_color=Color("36534a")
 				selected_style.border_color=GOLD
-				selected_style.set_border_width_all(2)
+				selected_style.set_border_width_all(0)
+				selected_style.border_width_bottom=4
 				selected_style.content_margin_top=8
 				selected_style.content_margin_bottom=8
 				card.add_theme_stylebox_override("normal",selected_style)
@@ -517,6 +565,7 @@ func _select_team(index: int) -> void:
 	selected_team=index
 	if mode=="battle":
 		arena.set_selected(index)
+		_update_companion()
 		_note("已选择 %s：点击空格部署 / 换位；点原来的睡眠格唤醒。"%GameData.species(run.team[index].id).name)
 	elif mode in ["map","reward","service"]:
 		if run.evolve(index): _note("%s 化形了！新的模样，新的力量。"%GameData.species(run.team[index].id).name)
@@ -584,7 +633,10 @@ func _process(delta: float) -> void:
 				remaining-=dt
 		arena.refresh(delta if not paused else 0.0)
 		if is_instance_valid(battle_title):
-			battle_title.text="%s · 第 %d / %d 波\n心灯 %d / %d  ·  露水 %d"%["暂停布阵" if paused else ("自动守心" if sim.running else "自由布阵"),maxi(1,sim.wave),sim.total_waves,int(sim.heart_hp),run.max_hp,int(sim.dew)]
+			battle_title.text="%s  ·  第 %d / %d 波"%["暂停" if paused else ("守心中" if sim.running else "布阵"),maxi(1,sim.wave),sim.total_waves]
+			heart_readout.text="心灯  %d / %d"%[int(sim.heart_hp),run.max_hp]
+			heart_meter.value=sim.heart_hp
+			dew_readout.text="露水  %d"%int(sim.dew)
 		if is_instance_valid(skill_button): skill_button.text="灯照 %s [Q]"%("%.0fs"%sim.skill_cooldown if sim.skill_cooldown>0 else "就绪")
 		if sim.finished and not settled: _battle_finished()
 	elif mode in ["reward","service"] and is_instance_valid(arena): arena.refresh(delta)
@@ -621,3 +673,11 @@ func _confirm_retreat() -> void:
 		run.finish(false)
 		_show_ending())
 	dialog.canceled.connect(dialog.queue_free)
+
+func _update_companion() -> void:
+	if not is_instance_valid(companion_portrait): return
+	var member: Dictionary=run.team[selected_team]
+	var data=GameData.species(member.id)
+	companion_portrait.texture=PixelArt.texture(member.id,"idle",0,bool(member.evolved))
+	companion_name.text="%s\n%s · %s  /  Lv.%d"%[GameData.display_name(member),data.element,data.role,int(member.level)]
+	companion_detail.text=data.description
