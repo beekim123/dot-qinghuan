@@ -1,0 +1,7 @@
+.godot/
+.DS_Store
+*.log
+*.tmp
+*.zip
+.env
+.env.*
