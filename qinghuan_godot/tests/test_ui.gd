@@ -14,6 +14,13 @@ func run_test() -> void:
 	scene.set_process(false)
 	scene.run.meta={"sand":0,"oil":0,"dew":0,"bond":0,"unlocked":["dida","taituan","dengxin"],"inherited":"","runs":0,"wins":0}
 	check(scene.mode=="yard","yard boot")
+	for dimensions in [Vector2(1440,900),Vector2(1180,812)]:
+		scene.size=dimensions
+		scene._layout()
+		await process_frame
+		check(scene.roster_scroll.position.x+scene.roster_scroll.size.x<scene.side_scroll.position.x,"roster clipped before sidebar")
+		check(scene.action_bar.position.y+scene.action_bar.size.y<=scene.roster_scroll.position.y,"action and roster never overlap")
+		check(is_equal_approx(fmod(scene.world_image.size.x,float(scene.world.size.x)),0.0),"integer world pixels")
 	scene._start_run()
 	check(scene.mode=="map","new run map")
 	check(scene.run.team.size()==3,"starter team")

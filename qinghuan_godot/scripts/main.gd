@@ -18,6 +18,7 @@ var sim: BattleSim
 var sidebar: VBoxContainer
 var side_scroll: ScrollContainer
 var roster: HBoxContainer
+var roster_scroll: ScrollContainer
 var header: Label
 var subtitle: Label
 var status: Label
@@ -117,8 +118,13 @@ func _build_shell() -> void:
 	side_scroll.add_child(sidebar)
 	action_bar=HBoxContainer.new()
 	add_child(action_bar)
+	roster_scroll=ScrollContainer.new()
+	roster_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	roster_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO
+	add_child(roster_scroll)
 	roster=HBoxContainer.new()
-	add_child(roster)
+	roster.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	roster_scroll.add_child(roster)
 	toast=_label("",17,GOLD)
 	toast.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	add_child(toast)
@@ -139,8 +145,8 @@ func _layout() -> void:
 	status.position=Vector2(size.x-650,29)
 	status.size=Vector2(620,45)
 	action_bar.position=Vector2(32,world_image.position.y+world_image.size.y+29)
-	roster.position=Vector2(32,maxf(size.y-147,action_bar.position.y+56))
-	roster.size=Vector2(available-12,108)
+	roster_scroll.position=Vector2(32,maxf(size.y-147,action_bar.position.y+56))
+	roster_scroll.size=Vector2(available-12,122)
 	toast.position=Vector2(32,size.y-29)
 	toast.size=Vector2(size.x-60,27)
 
