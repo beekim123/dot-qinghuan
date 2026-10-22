@@ -51,10 +51,10 @@ func setup(battle: BattleSim) -> void:
 	add_child(sun)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 10.7
-	camera.position = Vector3(7.8, 16.4, 16.2)
+	camera.size = 11.1
+	camera.position = Vector3(7.8, 16.65, 16.2)
 	add_child(camera)
-	camera.look_at(Vector3(0, -0.1, 0))
+	camera.look_at(Vector3(0, 0.15, 0))
 	camera.current = true
 	_terrain_root = Node3D.new()
 	add_child(_terrain_root)
@@ -95,7 +95,7 @@ func _world(point: Vector2, elevation: float = 0.0) -> Vector3:
 func _tile_color(terrain: String) -> Color:
 	match terrain:
 		"forest": return Color("3e8948")
-		"water": return Color("0099db")
+		"water": return Color("124e89").lerp(Color("0099db"),0.62)
 		"deep": return Color("124e89")
 		"sand": return Color("ead4aa")
 		"high": return Color("8b9bb4")
@@ -124,7 +124,7 @@ func _tile_texture(terrain: String, clean: bool, cell: Vector2i = Vector2i.ZERO)
 				if r<0.65+0.12*sin(float(gx/4)*0.34): col=base.lerp(Color("b86f50"),0.37)
 			elif terrain in ["water","deep"]:
 				col=base.lerp(Color("124e89"),0.2 if bands>0 else 0.0)
-				if (gy%15 in [3,4]) and gx%29 in range(6,17): col=Color("2ce8f5").lerp(base,0.4)
+				if (gy%15 in [3,4]) and gx%29 in range(6,17): col=Color("2ce8f5").lerp(base,0.68)
 			elif terrain=="sand":
 				if bands>0.8: col=base.lerp(Color("d77643"),0.16)
 			elif terrain=="high":
@@ -182,8 +182,8 @@ func _build_terrain() -> void:
 			_box(a + Vector3(inward.x,0,inward.y) * (float(k)-1.0) * 0.13, Vector3(0.34-float(k)*0.08,0.04,0.10), _mat(Color("b55088"),true),_terrain_root)
 	var heart_pos := _world(Vector2(sim.heart),_height(sim.heart))
 	_box(heart_pos+Vector3(0,0.06,0),Vector3(0.72,0.12,0.72),_mat(Color("d77643")),_terrain_root)
-	_heart_sprite = _sprite("heart", 0.061)
-	_heart_sprite.position = heart_pos + Vector3(0,0.12,0) + camera.global_basis.y * (10.5*0.061)
+	_heart_sprite = _sprite("heart", 0.045)
+	_heart_sprite.position = heart_pos + Vector3(0,0.12,0) + camera.global_basis.y * (10.5*0.045)
 	_terrain_root.add_child(_heart_sprite)
 	var glow := OmniLight3D.new()
 	glow.position = heart_pos+Vector3(0,1.1,0)
@@ -252,7 +252,7 @@ func screen_to_cell(viewport_pos: Vector2) -> Vector2i:
 func _make_actor(key: String, id: String, enemy: bool) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var sprite := _sprite(id,0.060 if id != "mianmian" else 0.065)
+	var sprite := _sprite(id,0.054 if id != "mianmian" else 0.065)
 	var foot := 8.5 if id in ["mianmian","spring"] else 7.5 if id=="murk" else 8.5 if id=="big" else 10.5
 	sprite.position = camera.global_basis.y * (foot*sprite.pixel_size) + Vector3(0,0.06,0)
 	root.add_child(sprite)
@@ -261,7 +261,7 @@ func _make_actor(key: String, id: String, enemy: bool) -> Dictionary:
 	bar.pixel_size = 0.035
 	bar.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	bar.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	bar.position.y = 1.35 if id != "mianmian" else 1.95
+	bar.position.y = 1.18 if id != "mianmian" else 1.95
 	root.add_child(bar)
 	var selection := _outline(Color("fee761"),0.83)
 	selection.position.y = 0.09
@@ -458,8 +458,8 @@ func _build_island() -> void:
 			_box(Vector3(c.x,-0.28,c.y),Vector3(0.13,0.56,0.14),_mat(Color("265c42")),_terrain_root)
 			_box(Vector3(c.x+0.11,-0.53,c.y+0.04),Vector3(0.13,0.31,0.12),_mat(Color("193c3e")),_terrain_root)
 	if is_forest:
-		for spec in [[-5.85,-3.4,0.052],[-4.1,-4.5,0.047],[-1.85,-4.75,0.056],[1.5,-4.7,0.047],[4.5,-4.1,0.052],[6.15,-2.0,0.050]]:
-			_decor_sprite("tree",Vector3(spec[0],0.0,spec[1]),spec[2],int(absf(spec[0])*2)%2)
+		for spec in [[-5.85,-3.4,0.052],[-4.1,-4.5,0.047],[-1.85,-4.75,0.056],[1.5,-4.7,0.047],[4.5,-4.1,0.052],[6.35,-2.85,0.046]]:
+			_decor_sprite("tree",Vector3(spec[0],0.0,spec[1]),float(spec[2])*0.90,int(absf(spec[0])*2)%2)
 		for spec in [[-5.8,2.8],[-5.95,-0.7],[-3.8,3.95],[-2.4,-4.05],[3.7,3.9],[5.9,1.8],[5.7,-3.2]]:
 			_decor_sprite("fern",Vector3(spec[0],0.02,spec[1]),0.027)
 		for spec in [[-4.7,-4.0],[3.6,-4.2],[-5.7,1.9],[4.9,3.6]]:
@@ -472,6 +472,12 @@ func _build_island() -> void:
 	if sim.biome in ["forest","lake","grass"]: _outside_pool()
 
 func _decor_sprite(kind:String,pos:Vector3,pixel:float,variant:int=0)->void:
+	if kind=="tree":
+		# Explicit screen-space canopy safety, independent of world/root depth.
+		for attempt in range(50):
+			var projected_top := camera.unproject_position(pos+camera.global_basis.y*(53.5*pixel))
+			if projected_top.y>=10.0: break
+			pixel*=0.94
 	var sprite := Sprite3D.new()
 	sprite.texture=Decor.texture(kind,variant)
 	sprite.pixel_size=pixel
@@ -482,6 +488,10 @@ func _decor_sprite(kind:String,pos:Vector3,pixel:float,variant:int=0)->void:
 	# Source y=53 is the foot; billboard foreshortening compensation keeps it grounded.
 	sprite.position=pos+camera.global_basis.y*(25.5*pixel)
 	_terrain_root.add_child(sprite)
+	if kind=="tree":
+		var canopy_top := camera.unproject_position(sprite.global_position+camera.global_basis.y*(28.0*pixel)).y
+		sprite.set_meta("canopy_top",canopy_top)
+		assert(canopy_top>=8.0,"Decorative canopy must remain inside viewport")
 	_shadow(pos+Vector3(0,0.012,0),0.75 if kind=="tree" else 0.3,_terrain_root)
 
 func _outside_pool()->void:
@@ -501,9 +511,28 @@ func _shore(cell:Vector2i,pos:Vector3)->void:
 		var other:Vector2i=cell+d
 		if other.x<0 or other.x>=sim.width or other.y<0 or other.y>=sim.height: continue
 		if str(sim.tiles[other.y*sim.width+other.x].terrain) not in ["water","deep"]:
-			var width := Vector3(0.10,0.055,0.95) if d.x!=0 else Vector3(0.95,0.055,0.10)
-			_box(pos+Vector3(d.x*0.44,0.06,d.y*0.44),width,_mat(Color("e4a672")),_terrain_root)
-			_box(pos+Vector3(d.x*0.35,0.059,d.y*0.35),Vector3(width.x,0.01,width.z)*Vector3(0.8,1,0.8),_mat(Color("2ce8f5")),_terrain_root)
+			var bank := Color("265c42") if sim.biome in ["forest","grass"] else Color("e4a672")
+			for j in range(4):
+				var inset := 0.10+float((j+cell.x+cell.y)%3)*0.035
+				var tangent := float(j)*0.24-0.36
+				var width := Vector3(inset,0.05,0.245) if d.x!=0 else Vector3(0.245,0.05,inset)
+				var shift := Vector3(d.x*(0.48-inset*0.5),0.063,d.y*(0.48-inset*0.5))
+				shift += Vector3(0,0,tangent) if d.x!=0 else Vector3(tangent,0,0)
+				_box(pos+shift,width,_mat(bank),_terrain_root)
+				if j%2==0:
+					_box(pos+shift+Vector3(-d.x*0.08,0.005,-d.y*0.08),Vector3(0.07,0.018,0.065),_mat(Color("8b9bb4")),_terrain_root)
+
+	# Round each exposed pool corner into a stepped shallow bank.
+	for corner in [Vector2i(-1,-1),Vector2i(1,-1),Vector2i(-1,1),Vector2i(1,1)]:
+		var a := cell+Vector2i(corner.x,0)
+		var b := cell+Vector2i(0,corner.y)
+		var a_water := a.x>=0 and a.x<sim.width and a.y>=0 and a.y<sim.height and str(sim.tiles[a.y*sim.width+a.x].terrain) in ["water","deep"]
+		var b_water := b.x>=0 and b.x<sim.width and b.y>=0 and b.y<sim.height and str(sim.tiles[b.y*sim.width+b.x].terrain) in ["water","deep"]
+		if not a_water and not b_water:
+			var bank := Color("265c42") if sim.biome in ["forest","grass"] else Color("e4a672")
+			_box(pos+Vector3(corner.x*0.36,0.065,corner.y*0.36),Vector3(0.28,0.025,0.28),_mat(bank),_terrain_root)
+			_box(pos+Vector3(corner.x*0.27,0.065,corner.y*0.43),Vector3(0.20,0.025,0.14),_mat(bank),_terrain_root)
+			_box(pos+Vector3(corner.x*0.43,0.065,corner.y*0.27),Vector3(0.14,0.025,0.20),_mat(bank),_terrain_root)
 
 func _entrance_mark()->Node3D:
 	var root := Node3D.new()
@@ -511,4 +540,19 @@ func _entrance_mark()->Node3D:
 	for x in [-0.30,0.30]:
 		_box(Vector3(x,0.13,0),Vector3(0.12,0.24,0.20),_mat(Color("68386c")),root)
 		_box(Vector3(x,0.26,0),Vector3(0.08,0.035,0.16),_mat(Color("b55088"),true),root)
+	var im := Image.create(16,20,false,Image.FORMAT_RGBA8)
+	im.fill(Color.TRANSPARENT)
+	var rows := ["................",".......ww.......",".....wwBBw......","....wB..CBw.....","....wB...CBw....",".....wB...Bw....","......wBBCw.....",".....wBCCw......","....wBCCw.......","....wBCw........",".....wBw........","......ww........"]
+	var colors := {"w":Color("5a6988"),"B":Color("68386c"),"C":Color("b55088")}
+	for y in range(rows.size()):
+		for x in range(rows[y].length()):
+			if rows[y][x]!=".": im.set_pixel(x,y,colors[rows[y][x]])
+	var wisp := Sprite3D.new()
+	wisp.texture=ImageTexture.create_from_image(im)
+	wisp.pixel_size=0.043
+	wisp.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	wisp.texture_filter=BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	wisp.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
+	wisp.position=Vector3(0,0.22,0)+camera.global_basis.y*0.30
+	root.add_child(wisp)
 	return root
