@@ -12,6 +12,7 @@ func run_test() -> void:
 	root.add_child(scene)
 	await process_frame
 	scene.set_process(false)
+	scene.run.meta={"sand":0,"oil":0,"dew":0,"bond":0,"unlocked":["dida","taituan","dengxin"],"inherited":"","runs":0,"wins":0}
 	check(scene.mode=="yard","yard boot")
 	scene._start_run()
 	check(scene.mode=="map","new run map")

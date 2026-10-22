@@ -46,7 +46,11 @@ func start_run(seed_override: int = 0) -> void:
 	team.clear()
 	for id in starters: team.append({"id":id,"level":1,"evolved":false})
 	var inherited = str(meta.inherited)
-	if inherited != "" and not has_species(inherited): team.append({"id":inherited,"level":1,"evolved":false})
+	if inherited != "":
+		if not has_species(inherited): team.append({"id":inherited,"level":1,"evolved":false})
+		else:
+			for member in team:
+				if member.id==inherited: member.level=2
 	max_hp = 18 + mini(3,int(meta.oil)) * 2
 	hp = max_hp
 	dew = 12

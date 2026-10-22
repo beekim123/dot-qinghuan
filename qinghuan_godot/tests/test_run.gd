@@ -101,6 +101,10 @@ func _initialize() -> void:
   check(saved.hp==20 and saved.team.size()==4,"next run includes oil and inheritance")
   check(saved.seed_value!=seed_value and saved.hour==0 and saved.wins==0,"next run fresh seeded state")
   check(saved.planet.clear_fraction()==0.0,"next globe not old cleared globe")
+  var changed_terrain = 0
+  for i in run.planet.cells.size():
+   if saved.planet.cells[i].biome != run.planet.cells[i].biome: changed_terrain += 1
+  check(changed_terrain>10,"new seed materially changes terrain")
   for member in saved.team: check(member.level==1 and not member.evolved,"levels and evolution reset")
   final_run = run
  # True loss through the simulator, not calling finish(false) as a shortcut.
@@ -134,5 +138,68 @@ func _initialize() -> void:
  deterministic.start_run(333)
  check(deterministic.planet.cells[0].dir==loss.planet.cells[0].dir,"geometry remains stable")
  check(not loss.buy_upgrade("bad_key"),"invalid upgrade rejected")
+ var nursery = Run.new()
+ nursery.start_run(444)
+ check(not nursery.evolve(0),"level1 evolution rejected")
+ nursery.train(0)
+ check(nursery.team[0].level==2 and nursery.team[1].level==1,"individual shop training scope")
+ nursery.train()
+ check(nursery.team[0].level==3 and nursery.team[1].level==2,"rest whole-team training scope")
+ check(nursery.evolve(0) and nursery.team[0].evolved,"actual level3 evolution")
+ check(not nursery.evolve(0),"duplicate evolution rejected")
+ var prior_count = nursery.team.size()
+ nursery.recruit("chayan"); nursery.recruit("chayan")
+ check(nursery.team.size()==prior_count+1,"bonding unique species")
+ check(not nursery.buy_upgrade("oil"),"cannot buy upgrade without sand")
+ var matching = Run.new()
+ matching.meta.inherited="dida"
+ matching.start_run(90)
+ check(matching.team.size()==3 and matching.team[0].level==2,"matching heir grants level2 starter")
+ check(matching.team[1].level==1 and matching.team[2].level==1,"matching heir buffs only chosen species")
+ var different = Run.new()
+ different.meta.inherited="piaopiao"
+ different.start_run(90)
+ check(different.team.size()==4 and different.team[3].id=="piaopiao" and different.team[3].level==1,"distinct heir adds level1 fourth companion")
+ var poor = Sim.new()
+ poor.setup({"seed":7,"team":starters,"heart_hp":18,"biome":"grass"})
+ var poor_spots = [Vector2i(1,5),Vector2i(1,4),Vector2i(2,5)]
+ for i in range(3): check(poor.deploy(i,poor_spots[i])=="","poor formation legal")
+ poor.start()
+ for tick in range(6000):
+  poor.step(0.05)
+  if poor.finished: break
+ var sleepers = 0
+ for unit in poor.units:
+  if unit.hp<=0: sleepers+=1
+ print("POSITION_RESULT poor_won=",poor.victory," heart=",poor.heart_hp," sleepers=",sleepers," time=",poor.time)
+ check(poor.heart_hp<terrain_worst_hp,"three-unit positions materially change heart outcome")
+ check(poor.finished,"poor formation actual terminal outcome")
+ # A lonely blocker beside the center should genuinely exhaust and release its targets.
+ var weary = Sim.new()
+ weary.setup({"seed":7,"team":starters,"heart_hp":30})
+ check(weary.deploy(1,Vector2i(5,2))=="","sleep test legal blocker")
+ weary.start()
+ var saw_sleep = false
+ for tick in range(6000):
+  weary.step(0.05)
+  if weary.units[0].hp<=0: saw_sleep=true
+  if weary.finished: break
+ print("SLEEP_RESULT observed=",saw_sleep," hp=",weary.units[0].hp," heart=",weary.heart_hp)
+ check(saw_sleep and weary.units[0].state=="sleep","real erosion produces sleeping companion")
+ var boss_pressure = Sim.new()
+ boss_pressure.setup({"seed":7,"team":starters,"heart_hp":100,"boss":"mianmian"})
+ boss_pressure.start()
+ var witnessed_boss = false
+ var boss_at_heart = false
+ for tick in range(14000):
+  boss_pressure.step(0.05)
+  for enemy in boss_pressure.enemies:
+   if enemy.id=="mianmian":
+    witnessed_boss=true
+    if enemy.pos.distance_to(Vector2(boss_pressure.heart))<0.15: boss_at_heart=true
+  if boss_pressure.finished: break
+ check(witnessed_boss and boss_at_heart,"boss actually spawns and advances dynamically to heart")
+ check(boss_pressure.finished and not boss_pressure.victory and boss_pressure.heart_hp==0,"uncleansed boss never awards timed victory")
+ print("BOSS_PRESSURE_RESULT witnessed=",witnessed_boss," reached_heart=",boss_at_heart," victory=",boss_pressure.victory," seconds=",boss_pressure.time)
  print("RUN_CHECKS ",checks," FAILURES ",failures)
  quit(1 if failures>0 else 0)

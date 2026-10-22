@@ -125,19 +125,21 @@ func _build_shell() -> void:
 
 func _layout() -> void:
 	if not is_instance_valid(world_image): return
-	var available = size.x-416
-	var scale_factor = maxi(1,mini(int(available/480.0),int((size.y-285)/270.0)))
-	world_image.size=Vector2(480,270)*scale_factor
-	world_image.position=Vector2(24+(available-world_image.size.x)/2,142)
-	world_title.position=Vector2(32,108)
-	world_hint.position=Vector2(world_image.position.x,world_image.position.y+world_image.size.y+10)
+	var available = size.x-396
+	var render_size = Vector2i(480,270) if size.x>=1376 and size.y>=900 else Vector2i(384,216)
+	world.size=render_size
+	var scale_factor = maxi(1,mini(int(available/render_size.x),int((size.y-360)/render_size.y)))
+	world_image.size=Vector2(render_size)*scale_factor
+	world_image.position=Vector2(24+(available-world_image.size.x)/2,132)
+	world_title.position=Vector2(32,100)
+	world_hint.position=Vector2(world_image.position.x,world_image.position.y+world_image.size.y+5)
 	world_hint.size=Vector2(available,25)
-	side_scroll.position=Vector2(size.x-378,112)
-	side_scroll.size=Vector2(350,size.y-164)
+	side_scroll.position=Vector2(size.x-358,112)
+	side_scroll.size=Vector2(330,size.y-164)
 	status.position=Vector2(size.x-650,29)
 	status.size=Vector2(620,45)
-	action_bar.position=Vector2(32,world_image.position.y+world_image.size.y+43)
-	roster.position=Vector2(32,size.y-141)
+	action_bar.position=Vector2(32,world_image.position.y+world_image.size.y+29)
+	roster.position=Vector2(32,maxf(size.y-147,action_bar.position.y+56))
 	roster.size=Vector2(available-12,108)
 	toast.position=Vector2(32,size.y-29)
 	toast.size=Vector2(size.x-60,27)
@@ -245,6 +247,7 @@ func _show_map() -> void:
 		var title = "星心 · 眠眠" if node.spring==2 else TYPES[node.type]
 		if node.type=="boss" and node.spring!=2: title="第 %d 口浊泉"%(int(node.spring)+1)
 		_button("%s  ·  %s\n%s"%[title,BIOMES.get(node.biome,"草原"),_node_reward(node)],_select_node.bind(i))
+	_text("伙伴达到3级后，点击下方卡片免费化形。",MINT,15)
 	_text("三口浊泉",GOLD,19)
 	for i in run.planet.springs.size():
 		var spring: Dictionary = run.planet.springs[i]
@@ -480,14 +483,21 @@ func _render_roster(yard: bool = false) -> void:
 		card.add_theme_constant_override("icon_max_width",44)
 		card.add_theme_font_size_override("font_size",15)
 		var role = str(data.role)
-		card.text="%s · %s\n%s"%[data.name,role,"Lv.%d%s"%[int(member.level)," · 已化形" if member.evolved else ""] if not yard else ("可出发" if member.id in run.meta.unlocked else "待结缘")]
-		card.tooltip_text="%s · %s\n点选后部署；地图上等级达到3可免费化形。"%[data.name,role]
+		card.text="%s · %s\n%s"%[GameData.display_name(member),role,"Lv.%d%s"%[int(member.level)," · 已化形" if member.evolved else ""] if not yard else ("可出发" if member.id in run.meta.unlocked else "待结缘")]
+		card.tooltip_text="%s · %s\n%s\n点选后部署；地图上等级达到3可免费化形。"%[GameData.display_name(member),role,data.description]
 		if yard:
 			card.disabled=not member.id in run.meta.unlocked
 			card.pressed.connect(_choose_starter.bind(str(member.id)))
 		else:
 			card.pressed.connect(_select_team.bind(i))
-			if i==selected_team: card.modulate=Color("fee761")
+			if i==selected_team:
+				var selected_style=StyleBoxFlat.new()
+				selected_style.bg_color=Color("193c3e")
+				selected_style.border_color=GOLD
+				selected_style.set_border_width_all(2)
+				selected_style.content_margin_top=8
+				selected_style.content_margin_bottom=8
+				card.add_theme_stylebox_override("normal",selected_style)
 		roster.add_child(card)
 
 func _choose_starter(id: String) -> void:
@@ -520,17 +530,17 @@ func _world_input(event: InputEvent) -> void:
 				if not moved: _world_click(event.position,false)
 		elif event.button_index==MOUSE_BUTTON_RIGHT and event.pressed: _world_click(event.position,true)
 	elif event is InputEventMouseMotion:
-		var pos: Vector2 = event.position/world_image.size*Vector2(480,270)
+		var pos: Vector2 = event.position/world_image.size*Vector2(world.size)
 		if dragging and mode in ["map","ending"]:
 			if event.position.distance_to(drag_start)>5: moved=true
-			if moved and is_instance_valid(globe): globe.handle_drag((event.position-drag_last)/world_image.size*Vector2(480,270))
+			if moved and is_instance_valid(globe): globe.handle_drag((event.position-drag_last)/world_image.size*Vector2(world.size))
 			drag_last=event.position
 		if mode=="battle":
 			var cell: Vector2i = arena.screen_to_cell(pos)
 			arena.set_hover(cell,sim.can_deploy(selected_team,cell)=="")
 
 func _world_click(local_pos: Vector2,right: bool) -> void:
-	var pos=local_pos/world_image.size*Vector2(480,270)
+	var pos=local_pos/world_image.size*Vector2(world.size)
 	if mode=="map":
 		var cell: int = globe.pick(pos)
 		if cell>=0:
